@@ -1,0 +1,45 @@
+edition = "2023";
+package main;
+
+option go_package = "github.com/stevenvegt/pseudonyms/proto";
+option features.field_presence = IMPLICIT;
+
+enum Version {
+  V1 = 0;
+}
+
+enum ContentType {
+  TOKEN = 0;
+  PSEUDONYM = 1;
+}
+
+enum Scope {
+  TREATMENT = 0;
+  RESEARCH = 1;
+}
+
+message Header {
+  Version version = 1;
+  ContentType content_type = 2;
+}
+
+message Container {
+  Header header = 1;
+  bytes nonce = 2;
+  bytes ciphertext = 3;
+}
+
+message Token {
+  string subject = 1;
+  string issuer = 2;
+  string audience = 3;
+  int64 expiration = 4;
+  int64 issued_at = 5;
+  repeated Scope scopes = 6;
+}
+
+message Pseudonym {
+  string subject = 1;
+  string audience = 2;
+  repeated Scope scopes = 3;
+}
