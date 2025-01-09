@@ -289,6 +289,7 @@ func main() {
 		Subject:  decryptedToken.Subject,
 		Audience: decryptedToken.Audience,
 		Scopes:   decryptedToken.Scopes,
+		Version:  1,
 	}
 
 	pseudonymString, err := createPseudonym(pseudonym, key)

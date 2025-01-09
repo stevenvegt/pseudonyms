@@ -19,7 +19,9 @@ enum Scope {
 }
 
 message Header {
+  // version of the pseudonym implementation
   Version version = 1;
+  // content type of the container, could be a token or a pseudonym.
   ContentType content_type = 2;
 }
 
@@ -30,16 +32,28 @@ message Container {
 }
 
 message Token {
+  // identifier of the subject, e.g. a BSN of a patient id.
   string subject = 1;
+  // identifier of the organization that requested the token.
   string issuer = 2;
+  // identifier of the organization that the token is created for.
   string audience = 3;
+  // expiration time of the token in seconds since epoch.
   int64 expiration = 4;
+  // time the token was issued in seconds since epoch.
   int64 issued_at = 5;
+  // scopes that the token can be used for.
   repeated Scope scopes = 6;
 }
 
 message Pseudonym {
+  // identifier of the subject, e.g. a BSN of a patient id.
   string subject = 1;
+  // identifief of the organization that the pseudonym is created for.
   string audience = 2;
-  repeated Scope scopes = 3;
+  // version which can be incremented in case the pseudonym has been compromised.
+  // Discussion if this is needed. This requires state at the server. Could also later be added in a new version.
+  int32 version = 3;
+  // scopes that the pseudonym can be used for.
+  repeated Scope scopes = 4;
 }
