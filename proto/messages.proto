@@ -54,6 +54,6 @@ message Pseudonym {
   // version which can be incremented in case the pseudonym has been compromised.
   // Discussion if this is needed. This requires state at the server. Could also later be added in a new version.
   int32 version = 3;
-  // scopes that the pseudonym can be used for.
-  repeated Scope scopes = 4;
+  // scope that the pseudonym can be used for.
+  Scope scope = 4;
 }

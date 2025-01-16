@@ -288,7 +288,7 @@ func main() {
 	pseudonym := &pb.Pseudonym{
 		Subject:  decryptedToken.Subject,
 		Audience: decryptedToken.Audience,
-		Scopes:   decryptedToken.Scopes,
+		Scope:    decryptedToken.Scopes[0],
 		Version:  1,
 	}
 
