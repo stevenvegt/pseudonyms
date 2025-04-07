@@ -28,7 +28,23 @@ This will start the server on `http://0.0.0.0:8080`.
 
 A [Bruno Client](https://docs.usebruno.com/introduction/what-is-bruno) is available in the `client` folder.
 
-## Example values:
+## Project Structure
+
+```plaintext
+.
+├── README.md This file
+├── client/ Client with bruno config to test the API
+├── crypto/ Crypto functions to encrypt/decrypt tokens and pseudonyms using AES-GCM
+├── proto/ Protobuf file to define the datamodel
+├── domain/ Domain logic to create tokens and pseudonyms in the protobuf format
+├── api/ Api files
+│   ├── spec.go OpenAPI spec file
+│   ├── generate.go Generated AIP from the spec
+│   ├── impl.go Implementation of the API
+└── main.go Main file to start the server
+```
+
+## Example token en pseudonym values:
 
 ### Token:
 
