@@ -1,0 +1,27 @@
+meta {
+  name: GetToken from Pseudo
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://0.0.0.0:8080/getToken
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identifier": {
+      "value": "{{pseudo}}",
+      "type": "ORGANISATION_PSEUDO"
+    },
+    "receiver": "ura:456",
+    "scope": "zorg",
+    "sender": "ura:555"
+  }
+}
+
+vars:post-response {
+  token: res.body.token
+}

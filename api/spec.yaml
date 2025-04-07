@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: Pseudoniemen Service (@git.commit.id.abbrev@)
+  description: See [PseudoniemenService](https://github.com/minvws/prs-documentation)
+  version: 0.1.0
+servers:
+  - url: /v1
+paths:
+  /getToken:
+    post:
+      tags:
+        - Token
+      summary: get a token
+      operationId: getToken
+      requestBody:
+        $ref: "#/components/requestBodies/getTokenRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/getTokenResponse"
+  /exchangeToken:
+    post:
+      tags:
+        - Token
+        - Identifier
+      summary: exchange token for an identifier
+      operationId: exchangeToken
+      requestBody:
+        $ref: "#/components/requestBodies/exchangeTokenRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/exchangeTokenResponse"
+  /exchangeIdentifier:
+    post:
+      tags:
+        - Identifier
+      summary: exchange an identifier for another identifier
+      operationId: exchangeIdentifier
+      requestBody:
+        $ref: "#/components/requestBodies/exchangeIdentifierRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/exchangeIdentifierResponse"
+components:
+  schemas:
+    scope:
+      type: string
+    token:
+      nullable: false
+      type: string
+    identifier:
+      nullable: false
+      type: object
+      properties:
+        value:
+          type: string
+        type:
+          $ref: "#/components/schemas/identifierTypes"
+    identifierTypes:
+      nullable: false
+      type: string
+      enum:
+        - BSN
+        - ORGANISATION_PSEUDO
+    getTokenResponse:
+      nullable: false
+      type: object
+      properties:
+        token:
+          $ref: "#/components/schemas/token"
+    exchangeTokenResponse:
+      nullable: false
+      type: object
+      properties:
+        identifier:
+          $ref: "#/components/schemas/identifier"
+    exchangeIdentifierResponse:
+      nullable: false
+      type: object
+      properties:
+        identifier:
+          $ref: "#/components/schemas/identifier"
+  responses:
+    getTokenResponse:
+      description: Get a token Response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/getTokenResponse"
+    exchangeTokenResponse:
+      description: successful operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/exchangeTokenResponse"
+    exchangeIdentifierResponse:
+      description: successful operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/exchangeIdentifierResponse"
+  requestBodies:
+    getTokenRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            properties:
+              identifier:
+                $ref: "#/components/schemas/identifier"
+              receiver:
+                type: string
+              scope:
+                $ref: "#/components/schemas/scope"
+              sender:
+                type: string
+    exchangeTokenRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            properties:
+              token:
+                $ref: "#/components/schemas/token"
+              identifierType:
+                $ref: "#/components/schemas/identifierTypes"
+              scope:
+                $ref: "#/components/schemas/scope"
+              organisation:
+                type: string
+    exchangeIdentifierRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            properties:
+              identifier:
+                $ref: "#/components/schemas/identifier"
+              recipientIdentifierType:
+                $ref: "#/components/schemas/identifierTypes"
+              scope:
+                $ref: "#/components/schemas/scope"
+              organisation:
+                type: string

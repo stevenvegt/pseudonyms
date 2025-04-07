@@ -1,0 +1,27 @@
+meta {
+  name: GetToken from BSN
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://0.0.0.0:8080/getToken
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identifier": {
+      "value": "1234999",
+      "type": "BSN"
+    },
+    "receiver": "ura:456",
+    "scope": "zorg",
+    "sender": "ura:555"
+  }
+}
+
+vars:post-response {
+  token: res.body.token
+}

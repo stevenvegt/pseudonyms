@@ -1,0 +1,26 @@
+meta {
+  name: Exchange Pseudo for BSN
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://0.0.0.0:8080/exchangeIdentifier
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identifier": {
+      "value": "{{pseudo}}",
+      "type": "ORGANISATION_PSEUDO"
+    },
+    "recipientIdentifierType": "BSN",
+    "scope": "zorg"
+  }
+}
+
+assert {
+  res.body.identifier.value: eq "1234999"
+}

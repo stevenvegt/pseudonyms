@@ -1,0 +1,28 @@
+meta {
+  name: ExchangeToken for Psuedonym
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://0.0.0.0:8080/exchangeToken
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "token":"{{token}}",
+    "identifierType":"ORGANISATION_PSEUDO",
+    "scope":"zorg"
+  }
+}
+
+vars:post-response {
+  pseudo: res.body.identifier.value
+}
+
+assert {
+  res.status: eq 200
+  res.body.identifier.type: eq ORGANISATION_PSEUDO
+}
