@@ -29,7 +29,7 @@ require (
 
 require (
 	golang.org/x/crypto v0.32.0 // indirect
-	google.golang.org/protobuf v1.36.2
+	google.golang.org/protobuf v1.36.6
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
