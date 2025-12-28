@@ -1,14 +1,24 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/stevenvegt/pseudonyms/api"
 )
 
 func main() {
-	server := api.NewPseudonymService()
+	keysDir := flag.String("keys-dir", "./keys", "Directory containing organization key files")
+	flag.Parse()
+
+	// Validate keys directory exists
+	if info, err := os.Stat(*keysDir); err != nil || !info.IsDir() {
+		log.Fatalf("Keys directory does not exist or is not a directory: %s", *keysDir)
+	}
+
+	server := api.NewPseudonymService(*keysDir)
 	strictHandler := api.NewStrictHandler(server, nil)
 
 	mux := http.NewServeMux()
@@ -16,7 +26,7 @@ func main() {
 
 	s := &http.Server{
 		Handler: handler,
-		Addr:    "0.0.0.0:8080",
+		Addr:    "0.0.0.0:8082",
 	}
 
 	// And we serve HTTP until the world ends.

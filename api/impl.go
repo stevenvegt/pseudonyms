@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/rsa"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/stevenvegt/pseudonyms/crypto"
 	domain "github.com/stevenvegt/pseudonyms/domain"
 	pb "github.com/stevenvegt/pseudonyms/proto"
 )
@@ -17,22 +19,21 @@ var key = []byte("examplekey1234567890123456789012")
 var _ StrictServerInterface = (*PseudonymService)(nil)
 
 type PseudonymService struct {
+	keysDir string
 }
 
-func NewPseudonymService() *PseudonymService {
-	return &PseudonymService{}
+func NewPseudonymService(keysDir string) *PseudonymService {
+	return &PseudonymService{keysDir: keysDir}
+}
+
+// getOrgPublicKey loads the public key for an organization from the filesystem
+func (ps *PseudonymService) getOrgPublicKey(orgID string) (*rsa.PublicKey, error) {
+	return crypto.LoadPublicKey(ps.keysDir, orgID)
 }
 
 // ExchangeIdentifier exchanges an identifier for a pseudonym or vice versa.
-// So, As an organisation, if you have a BSN, you can get your own pseudonym. Or, if you have a pseudonym, you can get the BSN of the subject.
+// Supports blinded operations for privacy-preserving exchanges.
 func (ps *PseudonymService) ExchangeIdentifier(ctx context.Context, exchangeIdentifierRequest ExchangeIdentifierRequestObject) (ExchangeIdentifierResponseObject, error) {
-
-	var (
-		idValue  string
-		idType   IdentifierTypes
-		subject  string
-		audience string
-	)
 
 	if exchangeIdentifierRequest.Body.Identifier == nil {
 		return nil, fmt.Errorf("identifier is required")
@@ -49,9 +50,41 @@ func (ps *PseudonymService) ExchangeIdentifier(ctx context.Context, exchangeIden
 	sourceIdentifierType := *exchangeIdentifierRequest.Body.Identifier.Type
 	targetIdentifierType := *exchangeIdentifierRequest.Body.RecipientIdentifierType
 
-	if sourceIdentifierType == targetIdentifierType {
+	// For non-blinded types, source and target cannot be the same
+	// (BLINDED_IDENTIFIER → BLINDED_IDENTIFIER is allowed: blinded pseudonym → blinded BSN)
+	if sourceIdentifierType == targetIdentifierType && sourceIdentifierType != BLINDEDIDENTIFIER {
 		return nil, fmt.Errorf("source and target identifier types cannot be the same")
 	}
+
+	// Handle blinded pseudonym unevaluation (blinded pseudonym → blinded BSN)
+	if sourceIdentifierType == BLINDEDIDENTIFIER {
+		blindedPseudonym := *exchangeIdentifierRequest.Body.Identifier.Value
+
+		if exchangeIdentifierRequest.Body.Organisation == nil {
+			return nil, fmt.Errorf("organisation is required for unevaluation")
+		}
+
+		// Unevaluate: remove org-specific key to get blinded BSN
+		blindedBSN, err := domain.BlindedIdentifierFromBlindedPseudonym(blindedPseudonym, *exchangeIdentifierRequest.Body.Organisation)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unevaluate blinded pseudonym: %v", err)
+		}
+
+		idType := BLINDEDIDENTIFIER
+		return ExchangeIdentifier200JSONResponse{
+			ExchangeIdentifierResponseJSONResponse{
+				Identifier: &Identifier{Value: &blindedBSN, Type: &idType},
+			},
+		}, nil
+	}
+
+	// Legacy flow: non-blinded operations
+	var (
+		idValue  string
+		idType   IdentifierTypes
+		subject  string
+		audience string
+	)
 
 	switch sourceIdentifierType {
 	case BSN:
@@ -90,7 +123,7 @@ func (ps *PseudonymService) ExchangeIdentifier(ctx context.Context, exchangeIden
 
 		pseudonymString, err := domain.CreatePseudonym(pseudonym, key)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to create pseudonym: %v", err)
 		}
 		idValue = pseudonymString
 		idType = ORGANISATIONPSEUDO
@@ -144,9 +177,36 @@ func (ps *PseudonymService) ExchangeToken(ctx context.Context, exchangeTokenRequ
 
 func (ps *PseudonymService) GetToken(ctx context.Context, getTokenRequest GetTokenRequestObject) (GetTokenResponseObject, error) {
 
-	var (
-		subject string
-	)
+	if getTokenRequest.Body.Receiver == nil {
+		return nil, fmt.Errorf("receiver is required")
+	}
+
+	if getTokenRequest.Body.Identifier == nil || getTokenRequest.Body.Identifier.Type == nil {
+		return nil, fmt.Errorf("identifier and type are required")
+	}
+
+	// Handle blinded identifiers differently - use blind evaluation
+	if *getTokenRequest.Body.Identifier.Type == BLINDEDIDENTIFIER {
+		blindedElement := *getTokenRequest.Body.Identifier.Value
+		receiverOrg := *getTokenRequest.Body.Receiver
+
+		// Get the receiver's public key
+		pubKey, err := ps.getOrgPublicKey(receiverOrg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get receiver public key: %v", err)
+		}
+
+		// Evaluate the blinded element with org-specific key and encrypt for receiver
+		encryptedToken, err := domain.CreateBlindedToken(blindedElement, receiverOrg, *pubKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create blinded token: %v", err)
+		}
+
+		return GetToken200JSONResponse{GetTokenResponseJSONResponse{Token: &encryptedToken}}, nil
+	}
+
+	// Handle non-blinded identifiers (legacy flow)
+	var subject string
 
 	switch *getTokenRequest.Body.Identifier.Type {
 	case BSN:
@@ -162,6 +222,9 @@ func (ps *PseudonymService) GetToken(ctx context.Context, getTokenRequest GetTok
 	}
 
 	now := time.Now()
+	if getTokenRequest.Body.Sender == nil {
+		return nil, fmt.Errorf("sender is required")
+	}
 
 	token := &pb.Token{
 		Subject:    subject,
@@ -174,7 +237,7 @@ func (ps *PseudonymService) GetToken(ctx context.Context, getTokenRequest GetTok
 
 	tokenString, err := domain.CreateToken(token, key)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to create token: %v", err)
 	}
 
 	return GetToken200JSONResponse{GetTokenResponseJSONResponse{Token: &tokenString}}, nil
