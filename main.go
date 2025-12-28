@@ -16,7 +16,7 @@ func main() {
 
 	s := &http.Server{
 		Handler: handler,
-		Addr:    "0.0.0.0:8080",
+		Addr:    "0.0.0.0:8082",
 	}
 
 	// And we serve HTTP until the world ends.

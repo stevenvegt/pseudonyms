@@ -162,6 +162,9 @@ func (ps *PseudonymService) GetToken(ctx context.Context, getTokenRequest GetTok
 	}
 
 	now := time.Now()
+	if getTokenRequest.Body.Sender == nil || getTokenRequest.Body.Receiver == nil {
+		return nil, fmt.Errorf("sender and receiver are required")
+	}
 
 	token := &pb.Token{
 		Subject:    subject,

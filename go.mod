@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/bwesterb/go-ristretto v1.2.3 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/getkin/kin-openapi v0.127.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -28,8 +29,8 @@ require (
 )
 
 require (
-	google.golang.org/protobuf v1.36.6
 	golang.org/x/crypto v0.35.0 // indirect
+	google.golang.org/protobuf v1.36.6
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
