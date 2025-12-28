@@ -60,6 +60,37 @@ func Blind(input []byte) ([]byte, []byte, error) {
 	return blindBytes, blindedElementBytes, nil
 }
 
+// BlindMarshaledPoint blinds an already-marshaled Ristretto point (e.g., a pseudonym)
+// This is used when blinding a pseudonym to recover the original BSN.
+func BlindMarshaledPoint(marshaledPoint []byte) ([]byte, []byte, error) {
+	var point ristretto.Point
+	if err := point.UnmarshalBinary(marshaledPoint); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal point: %v", err)
+	}
+
+	var identity ristretto.Point
+	identity.SetZero()
+	if point.Equals(&identity) {
+		return nil, nil, InvalidInputError
+	}
+
+	var blind ristretto.Scalar
+	blind.Rand()
+
+	var blindedPoint ristretto.Point
+	blindedPoint.ScalarMult(&point, &blind)
+
+	blindBytes, err := blind.MarshalBinary()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to encode blind: %v", err)
+	}
+	blindedPointBytes, err := blindedPoint.MarshalBinary()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to encode blinded point: %v", err)
+	}
+	return blindBytes, blindedPointBytes, nil
+}
+
 func Unembed(m ristretto.Point) []byte {
 	res := [16]byte{}
 	em := m.Lizard()

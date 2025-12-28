@@ -5,9 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"fmt"
-	"log"
 
-	"github.com/bwesterb/go-ristretto"
 	"github.com/stevenvegt/pseudonyms/crypto"
 	blinding "github.com/stevenvegt/pseudonyms/crypto"
 	pb "github.com/stevenvegt/pseudonyms/proto"
@@ -26,35 +24,19 @@ func CreateBlindedIdentifier(identifier string) (string, string, error) {
 }
 
 func CreateBlindedPsuedonym(pseudonym string) (string, string, error) {
-	// Try to decode as base64 first (for pseudonyms which are marshaled points)
+	// Decode the base64-encoded pseudonym (marshaled Ristretto point)
 	decoded, err := base64.StdEncoding.DecodeString(pseudonym)
-	if err == nil && len(decoded) == 32 {
-		// This is a pseudonym (marshaled Ristretto point), blind it as a point
-		return blindMarshaledPoint(decoded)
-	}
-	return "", "", err
-}
-
-// blindMarshaledPoint blinds an already-marshaled Ristretto point (e.g., a pseudonym)
-func blindMarshaledPoint(marshaledPoint []byte) (string, string, error) {
-	var point ristretto.Point
-	if err := point.UnmarshalBinary(marshaledPoint); err != nil {
-		return "", "", fmt.Errorf("failed to unmarshal point: %v", err)
-	}
-
-	var blind ristretto.Scalar
-	blind.Rand()
-
-	var blindedPoint ristretto.Point
-	blindedPoint.ScalarMult(&point, &blind)
-
-	blindBytes, err := blind.MarshalBinary()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to encode blind: %v", err)
+		return "", "", fmt.Errorf("failed to decode pseudonym: %v", err)
 	}
-	blindedPointBytes, err := blindedPoint.MarshalBinary()
+	if len(decoded) != 32 {
+		return "", "", fmt.Errorf("invalid pseudonym length: expected 32 bytes, got %d", len(decoded))
+	}
+
+	// Blind the marshaled point using the crypto module
+	blindBytes, blindedPointBytes, err := blinding.BlindMarshaledPoint(decoded)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to encode blinded point: %v", err)
+		return "", "", err
 	}
 
 	return base64.StdEncoding.EncodeToString(blindBytes), base64.StdEncoding.EncodeToString(blindedPointBytes), nil
@@ -173,7 +155,7 @@ func CreateToken(token *pb.Token, key []byte) (string, error) {
 
 	tokenContainer, err := prototext.Marshal(&container)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to marshal token container: %v", err)
 	}
 
 	b64TokenContainer := base64.StdEncoding.EncodeToString(tokenContainer)
