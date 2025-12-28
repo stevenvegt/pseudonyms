@@ -52,7 +52,7 @@ func TestCreateAndDecryptPseudonym(t *testing.T) {
 		t.Fatalf("failed to create blinded token: %v", err)
 	}
 
-	blindedBSN, err := BlindedIdentifierFromBlindedPseudonym(blindedPseudonym)
+	blindedBSN, err := BlindedIdentifierFromBlindedPseudonym(blindedPseudonym, "test-org")
 	if err != nil {
 		t.Fatalf("failed to create blinded token from blinded pseudonym: %v", err)
 	}

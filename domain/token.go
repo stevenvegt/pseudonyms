@@ -82,12 +82,12 @@ func DecryptAndUnblindToken(encryptedBlindedElementB64 string, blindB64 string, 
 	return base64.StdEncoding.EncodeToString(pseudonymBytes), nil
 }
 
-func BlindedIdentifierFromBlindedPseudonym(blindedPseudonym string) (string, error) {
+func BlindedIdentifierFromBlindedPseudonym(blindedPseudonym string, orgID string) (string, error) {
 	blindedElement, err := base64.StdEncoding.DecodeString(blindedPseudonym)
 	if err != nil {
 		return "", err
 	}
-	key := blinding.KeyForOrgID("test-org")
+	key := blinding.KeyForOrgID(orgID)
 	unevaluatedElement, err := blinding.Unevaluate(key, blindedElement)
 	if err != nil {
 		return "", err

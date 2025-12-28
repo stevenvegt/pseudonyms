@@ -2,12 +2,12 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/stevenvegt/pseudonyms/crypto"
 	domain "github.com/stevenvegt/pseudonyms/domain"
 	pb "github.com/stevenvegt/pseudonyms/proto"
 )
@@ -16,35 +16,19 @@ import (
 // Example key (must be 16, 24, or 32 bytes for AES-128, AES-192, AES-256)
 var key = []byte("examplekey1234567890123456789012")
 
-// TODO: In production, this should be a proper key management service
-var orgPublicKeys = make(map[string]rsa.PublicKey)
-var orgPrivateKeys = make(map[string]*rsa.PrivateKey)
-
-// getOrCreateOrgKeys retrieves or creates RSA keys for an organization
-func getOrCreateOrgKeys(orgID string) (rsa.PublicKey, *rsa.PrivateKey, error) {
-	if privKey, exists := orgPrivateKeys[orgID]; exists {
-		return privKey.PublicKey, privKey, nil
-	}
-
-	// Generate new key pair for this organization
-	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return rsa.PublicKey{}, nil, fmt.Errorf("failed to generate RSA key: %v", err)
-	}
-
-	orgPrivateKeys[orgID] = privKey
-	orgPublicKeys[orgID] = privKey.PublicKey
-
-	return privKey.PublicKey, privKey, nil
-}
-
 var _ StrictServerInterface = (*PseudonymService)(nil)
 
 type PseudonymService struct {
+	keysDir string
 }
 
-func NewPseudonymService() *PseudonymService {
-	return &PseudonymService{}
+func NewPseudonymService(keysDir string) *PseudonymService {
+	return &PseudonymService{keysDir: keysDir}
+}
+
+// getOrgPublicKey loads the public key for an organization from the filesystem
+func (ps *PseudonymService) getOrgPublicKey(orgID string) (*rsa.PublicKey, error) {
+	return crypto.LoadPublicKey(ps.keysDir, orgID)
 }
 
 // ExchangeIdentifier exchanges an identifier for a pseudonym or vice versa.
@@ -66,16 +50,13 @@ func (ps *PseudonymService) ExchangeIdentifier(ctx context.Context, exchangeIden
 	sourceIdentifierType := *exchangeIdentifierRequest.Body.Identifier.Type
 	targetIdentifierType := *exchangeIdentifierRequest.Body.RecipientIdentifierType
 
-	if sourceIdentifierType == targetIdentifierType {
+	// For non-blinded types, source and target cannot be the same
+	// (BLINDED_IDENTIFIER → BLINDED_IDENTIFIER is allowed: blinded pseudonym → blinded BSN)
+	if sourceIdentifierType == targetIdentifierType && sourceIdentifierType != BLINDEDIDENTIFIER {
 		return nil, fmt.Errorf("source and target identifier types cannot be the same")
 	}
 
-	// Handle blinded pseudonym → blinded BSN (Party B recovering BSN)
-	if sourceIdentifierType == BLINDEDIDENTIFIER && targetIdentifierType == BLINDEDIDENTIFIER {
-		return nil, fmt.Errorf("cannot convert BLINDED_IDENTIFIER to BLINDED_IDENTIFIER - use different target type")
-	}
-
-	// Handle blinded pseudonym unevaluation
+	// Handle blinded pseudonym unevaluation (blinded pseudonym → blinded BSN)
 	if sourceIdentifierType == BLINDEDIDENTIFIER {
 		blindedPseudonym := *exchangeIdentifierRequest.Body.Identifier.Value
 
@@ -84,7 +65,7 @@ func (ps *PseudonymService) ExchangeIdentifier(ctx context.Context, exchangeIden
 		}
 
 		// Unevaluate: remove org-specific key to get blinded BSN
-		blindedBSN, err := domain.BlindedIdentifierFromBlindedPseudonym(blindedPseudonym)
+		blindedBSN, err := domain.BlindedIdentifierFromBlindedPseudonym(blindedPseudonym, *exchangeIdentifierRequest.Body.Organisation)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unevaluate blinded pseudonym: %v", err)
 		}
@@ -210,13 +191,13 @@ func (ps *PseudonymService) GetToken(ctx context.Context, getTokenRequest GetTok
 		receiverOrg := *getTokenRequest.Body.Receiver
 
 		// Get the receiver's public key
-		pubKey, _, err := getOrCreateOrgKeys(receiverOrg)
+		pubKey, err := ps.getOrgPublicKey(receiverOrg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get receiver public key: %v", err)
 		}
 
 		// Evaluate the blinded element with org-specific key and encrypt for receiver
-		encryptedToken, err := domain.CreateBlindedToken(blindedElement, receiverOrg, pubKey)
+		encryptedToken, err := domain.CreateBlindedToken(blindedElement, receiverOrg, *pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create blinded token: %v", err)
 		}

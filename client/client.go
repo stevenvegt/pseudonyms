@@ -7,6 +7,7 @@ import (
 	"os"
 
 	api "github.com/stevenvegt/pseudonyms/client/api"
+	"github.com/stevenvegt/pseudonyms/crypto"
 	"github.com/stevenvegt/pseudonyms/domain"
 )
 
@@ -18,6 +19,7 @@ func main() {
 	token := flag.String("token", "", "Encrypted token (receiver mode)")
 	blind := flag.String("blind", "", "Blind value (receiver mode)")
 	privKeyOrg := flag.String("org", "", "Organization ID for private key lookup (receiver mode)")
+	keysDir := flag.String("keys-dir", "./keys", "Directory containing organization key files")
 	serverURL := flag.String("server", "http://localhost:8082", "Server URL")
 
 	flag.Parse()
@@ -34,7 +36,7 @@ func main() {
 	case "initiator":
 		runInitiator(ctx, client, *bsn, *receiverOrg)
 	case "receiver":
-		runReceiver(ctx, client, *token, *blind, *privKeyOrg, *receiverOrg)
+		runReceiver(ctx, client, *token, *blind, *privKeyOrg, *keysDir, *receiverOrg)
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid mode: %s. Use 'initiator' or 'receiver'\n", *mode)
 		os.Exit(1)
@@ -91,7 +93,7 @@ func runInitiator(ctx context.Context, client *api.ClientWithResponses, bsn stri
 	fmt.Println("Initiator should send both token and blind to Receiver via secure channel.")
 }
 
-func runReceiver(ctx context.Context, client *api.ClientWithResponses, encryptedToken string, blindInitiator string, orgID string, receiverOrg string) {
+func runReceiver(ctx context.Context, client *api.ClientWithResponses, encryptedToken string, blindInitiator string, orgID string, keysDir string, receiverOrg string) {
 	if encryptedToken == "" || blindInitiator == "" {
 		fmt.Fprintf(os.Stderr, "Receiver mode requires -token and -blind parameters\n")
 		os.Exit(1)
@@ -102,45 +104,77 @@ func runReceiver(ctx context.Context, client *api.ClientWithResponses, encrypted
 		os.Exit(1)
 	}
 
-	fmt.Println("=== Receiver: Recovering BSN from pseudonym ===")
+	fmt.Println("=== Receiver: Recovering Pseudonym ===")
 	fmt.Println()
 
-	// Step 1: Decrypt and unblind the token to get pseudonym
-	// NOTE: This requires Receiver's private key which is stored on the server
-	// In production, this would be an API call that does decryption server-side
-	fmt.Println("1. Decrypting and unblinding token")
-	fmt.Println("   [NOTE: Requires Receiver's private key - would be done server-side]")
-	fmt.Println("   [For this demo, we cannot complete this step without the private key]")
+	// Step 1: Load private key from filesystem
+	fmt.Printf("1. Loading private key for organization: %s\n", orgID)
+	privKey, err := crypto.LoadPrivateKey(keysDir, orgID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load private key: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("   Private key loaded successfully")
 	fmt.Println()
 
-	// In a real implementation, Receiver would have their private key or call an API
-	// that uses it. For now, we'll demonstrate the second part of the flow:
-	// converting a pseudonym back to BSN
-
-	fmt.Println("2. Assuming Receiver has the pseudonym, they can recover the BSN:")
-	fmt.Println("   a. Blind the pseudonym")
-	fmt.Println("   b. Send to service for unevaluation")
-	fmt.Println("   c. Unblind the result to get original BSN")
+	// Step 2: Decrypt and unblind the token to get pseudonym
+	fmt.Println("2. Decrypting and unblinding token")
+	pseudonym, err := domain.DecryptAndUnblindToken(encryptedToken, blindInitiator, *privKey)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to decrypt and unblind token: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("   Pseudonym recovered: %s\n", pseudonym)
 	fmt.Println()
 
-	// Example: if Receiver had a pseudonym
-	fmt.Println("Example flow (if pseudonym was available):")
-	fmt.Println("  pseudonymBase64 := \"<received from Initiator>\"")
-	fmt.Println("  blind2, blindedPseudonym := domain.CreateBlindedPsuedonym(pseudonymBase64)")
+	// Step 3: Optionally recover BSN by blinding pseudonym and calling ExchangeIdentifier
+	fmt.Println("3. Recovering original BSN from pseudonym")
+
+	// Blind the pseudonym
+	blind2, blindedPseudonym, err := domain.CreateBlindedPsuedonym(pseudonym)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to blind pseudonym: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("   Blinded pseudonym: %s\n", blindedPseudonym)
 	fmt.Println()
-	fmt.Println("  // Send to service")
-	fmt.Println("  blindedIdType := api.BLINDEDIDENTIFIER")
-	fmt.Println("  exchangeReq := api.ExchangeIdentifierJSONRequestBody{")
-	fmt.Println("    Identifier: &api.Identifier{Type: &blindedIdType, Value: &blindedPseudonym},")
-	fmt.Println("    RecipientIdentifierType: &blindedIdType,")
-	fmt.Printf("    Organisation: \"%s\",\n", receiverOrg)
-	fmt.Println("  }")
-	fmt.Println("  resp := client.ExchangeIdentifierWithResponse(ctx, exchangeReq)")
+
+	// Send to service for unevaluation
+	blindedIdType := api.BLINDEDIDENTIFIER
+	exchangeReq := api.ExchangeIdentifierJSONRequestBody{
+		Identifier: &api.Identifier{
+			Type:  &blindedIdType,
+			Value: &blindedPseudonym,
+		},
+		RecipientIdentifierType: &blindedIdType,
+		Organisation:            &receiverOrg,
+	}
+
+	fmt.Println("4. Calling ExchangeIdentifier to unevaluate blinded pseudonym")
+	resp, err := client.ExchangeIdentifierWithResponse(ctx, exchangeReq)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to exchange identifier: %v\n", err)
+		os.Exit(1)
+	}
+
+	if resp.JSON200 == nil {
+		fmt.Fprintf(os.Stderr, "Unexpected response: %s\n", resp.Status())
+		os.Exit(1)
+	}
+
+	blindedBSN := *resp.JSON200.Identifier.Value
+	fmt.Printf("   Blinded BSN received: %s\n", blindedBSN)
 	fmt.Println()
-	fmt.Println("  // Unblind to get BSN")
-	fmt.Println("  blindedBSN := resp.JSON200.Identifier.Value")
-	fmt.Println("  recoveredBSN := domain.Unblind(blind2, blindedBSN)")
+
+	// Unblind to get original BSN
+	fmt.Println("5. Unblinding to recover original BSN")
+	recoveredBSN, err := domain.Unblind(blind2, blindedBSN)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to unblind BSN: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("   Recovered BSN: %s\n", string(recoveredBSN))
 	fmt.Println()
+
 	fmt.Println("=== Receiver Flow Complete ===")
-	fmt.Println("Note: Full implementation requires private key management on client or server-side API.")
 }
