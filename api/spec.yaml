@@ -61,6 +61,7 @@ components:
       enum:
         - BSN
         - ORGANISATION_PSEUDO
+        - BLINDED_IDENTIFIER
     getTokenResponse:
       nullable: false
       type: object
