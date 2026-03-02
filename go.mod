@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	github.com/agl/gcmsiv v0.0.0-20190418185415-e8dcd2f151dc
-	github.com/oapi-codegen/runtime v1.1.1
+	github.com/oapi-codegen/runtime v1.2.0
 )
 
 require (
@@ -28,8 +28,8 @@ require (
 )
 
 require (
-	google.golang.org/protobuf v1.36.6
 	golang.org/x/crypto v0.35.0 // indirect
+	google.golang.org/protobuf v1.36.6
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
